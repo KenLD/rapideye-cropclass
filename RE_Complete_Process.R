@@ -5,13 +5,13 @@
 #====================== NDVI ============================
 
 #Installing required packages
-install.packages("pacman")
-pacman::p_load(raster, mapview, rasterVis, devtools)
-install.packages("backports")
-install.packages("ModelMetrics")
-install.packages("caret")
-devtools::install_github("krlmlr/here")
-devtools::install_github("pat-s/hsdar")
+#install.packages("pacman")
+#pacman::p_load(raster, mapview, rasterVis, devtools)
+#install.packages("backports")
+#install.packages("ModelMetrics")
+#install.packages("caret")
+#devtools::install_github("krlmlr/here")
+#devtools::install_github("pat-s/hsdar")
 
 #Loading required packages
 library(raster)
@@ -31,7 +31,7 @@ file <- list.files(file.path(datadir, "3362507_2012-07-24_RE2_3A_326529"), patte
 file
 
 #read the files in R, nlayers shows the number of bands
-rapid <- raster::brick(file[1])
+rapid <- raster::brick(file[4])
 rapid
 
 #-------------- Visualization ------------
@@ -51,35 +51,35 @@ mapview(rapid[[4]], na.color = "transparent", map.types = "Esri.WorldImagery")
 wavelength <- c(440, 520, 630, 690, 760)
 wavelength
 
-#optional hyperspecs for performance
-#hyperspecs <- hsdar::HyperSpecRaster(raster, wavelength)
-#class(hyperspecs)
-
-#speclip for further steps
-rapidclass <- hsdar::speclib(rapid, wavelength)
+#Format ändern
+rapidclass <- hsdar::HyperSpecRaster(rapid, wavelength)
 class(rapidclass)
+
+#optional speclip for further steps
+#rapidclass <- hsdar::speclib(rapid, wavelength)
+#class(rapidclass)
 
 
 #-------------------- Vegetation Indices --------------
 
 #required packages
-devtools::install_github("pat-s/rasterFunctions")
-install.packages("colorRamps")
-install.packages("tiff")
+#devtools::install_github("pat-s/rasterFunctions")
+#install.packages("colorRamps")
+#install.packages("tiff")
 require(rasterFunctions)
 require(colorRamps)
 
 
 #NDVI Calculation Option 1
 time <- Sys.time()
-ndvi_speclib <- vegindex(rapidclass, index = "NDVI2")
+ndvi_hyperspec <- vegindex(rapidclass, index = "NDVI2")
 Sys.time() - time
 
 #Quick look
-rasterVis::levelplot(ndvi_speclib@spectra@spectra_ra, margin = FALSE,
+rasterVis::levelplot(ndvi_hyperspec@spectra@spectra_ra, margin = FALSE,
                      pretty = TRUE, col.regions = rev(colorRamps::green2red(400)))
 #Dataexport
-writeRaster(ndvi_speclib, "3362507_2012-07-24_RE2_3A_326529_NDVI", format = "GTiff", overwrite=TRUE)
+writeRaster(ndvi_hyperspec, "3362507_2012-07-24_RE2_3A_326529_NDVI", format = "GTiff", overwrite=TRUE)
 
 
 
@@ -99,11 +99,27 @@ spplot(pci, col.regions = rev(heat.colors(20)), cex=1,
 
 #====================== Unsupervised Classification =============
 
+#-------Option 1 (aus Remotesensing and GIS for Ecologists)------
+
+#nötige Pakete
+#install.packages("RStoolbox")
+require(RStoolbox)
+
+set.seed(6)
+UC_2012_1 <- unsuperClass(rapidclass, nClasses = 5, nStarts = 50, nSamples = 10000, norm = TRUE)
+plot(UC_2012_1$map)
+writeRaster(UC_2012_1$map, "3362507_2012-07-24_RE2_3A_326529_UC1", format = "GTiff", overwrite=TRUE)
+
+#--------Option 2(aus R Spatial Tutorial)-----------------
+
 gc() #Arbeitsspeicher leeren
-km <- kmeans(values(rapid), centers=5, iter.max=500,
+km <- kmeans(values(rapidclass), centers=5, iter.max=500,
              nstart=3, algorithm="Lloyd")     #High Memory Usage
-kmr <- setValues(ndvi_speclib, km$cluster)
+UC_2012_2 <- setValues(ndvi_hyperspec, km$cluster)
 plot(kmr, main = 'Unsupervised classification of RapidEye')
+
+#Dataexport
+writeRaster(UC_2012_2, "3362507_2012-07-24_RE2_3A_326529_UC2", format = "GTiff", overwrite=TRUE)
 
 #==================== Supervised Classification =============
 
